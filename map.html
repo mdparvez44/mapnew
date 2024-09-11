@@ -1,0 +1,169 @@
+https://github.com/mdparvez44/Maps.git
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Route Map with Traffic Density</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.8.0/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.css" />
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+        #map {
+            height: 90vh;
+            width: 100%;
+        }
+        #controls {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background-color: white;
+            padding: 10px;
+            z-index: 1000;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+            font-family: Arial, sans-serif;
+        }
+        #controls input {
+            margin-bottom: 10px;
+        }
+        #info {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            font-size: 14px;
+            z-index: 1000;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        }
+    </style>
+</head>
+
+<body>
+    <div id="controls">
+        <label for="from">From: </label>
+        <input type="text" id="from" placeholder="Enter starting location"><br>
+        <label for="to">To: </label>
+        <input type="text" id="to" placeholder="Enter destination"><br>
+        <button onclick="calculateRoute()">Get Route</button>
+    </div>
+    <div id="info">Distance: --, Time: --</div>
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet@1.8.0/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.js"></script>
+    <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+
+    <script>
+        var map = L.map('map', {
+            zoomControl: false // Disable default zoom control so we can reposition it
+        }).setView([17.3850, 78.4867], 11); // Default view
+
+        // Add the zoom control manually and position it in the bottom right corner
+        L.control.zoom({
+            position: 'bottomright'
+        }).addTo(map);
+
+        // Use a tile provider that resembles Google Maps style
+        L.tileLayer('https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+            subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+            attribution: 'Map data © Google'
+        }).addTo(map);
+
+        var control = L.Routing.control({
+            waypoints: [],
+            geocoder: L.Control.Geocoder.nominatim(),
+            routeWhileDragging: true,
+            lineOptions: {
+                styles: [{color: 'blue', opacity: 1, weight: 5}] // Default route line style
+            }
+        }).addTo(map);
+
+        function calculateRoute() {
+            var fromLocation = document.getElementById('from').value;
+            var toLocation = document.getElementById('to').value;
+
+            if (fromLocation && toLocation) {
+                // Fetch coordinates for both locations
+                getCoordinates(fromLocation, function(fromCoords) {
+                    getCoordinates(toLocation, function(toCoords) {
+                        if (fromCoords && toCoords) {
+                            // Update routing control with new waypoints
+                            control.setWaypoints([
+                                L.latLng(fromCoords[0], fromCoords[1]),
+                                L.latLng(toCoords[0], toCoords[1])
+                            ]);
+
+                            // Show markers at start and end
+                            L.marker(fromCoords).addTo(map).bindPopup("Start: " + fromLocation).openPopup();
+                            L.marker(toCoords).addTo(map).bindPopup("End: " + toLocation).openPopup();
+
+                            // Show distance and duration once the route is calculated
+                            control.on('routesfound', function(e) {
+                                var route = e.routes[0];
+                                var distance = (route.summary.totalDistance / 1000).toFixed(2) + ' km';
+                                var time = (route.summary.totalTime / 60).toFixed(2) + ' min';
+                                document.getElementById('info').innerText = 'Distance: ' + distance + ', Time: ' + time;
+
+                                // Apply traffic density simulation to route segments
+                                applyTrafficDensity(route.coordinates);
+                            });
+                        } else {
+                            alert('Unable to get coordinates for one or both locations.');
+                        }
+                    });
+                });
+            } else {
+                alert('Please enter both locations.');
+            }
+        }
+
+        // Function to get coordinates using OpenStreetMap's Nominatim API
+        function getCoordinates(location, callback) {
+            fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(location)}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data && data.length > 0) {
+                        var lat = data[0].lat;
+                        var lon = data[0].lon;
+                        callback([lat, lon]);
+                    } else {
+                        callback(null);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching coordinates:', error);
+                    callback(null);
+                });
+        }
+
+        // Function to simulate traffic density and apply colors to route segments
+        function applyTrafficDensity(coordinates) {
+            let trafficColors = ['blue', 'yellow', 'orange', 'red']; // From low to high traffic
+            let colorIndex = 0;
+
+            for (let i = 0; i < coordinates.length - 1; i++) {
+                let segment = L.polyline([coordinates[i], coordinates[i + 1]], {
+                    color: trafficColors[colorIndex],
+                    weight: 5,
+                    opacity: 1
+                }).addTo(map);
+
+                // Rotate through traffic colors for simulation purposes
+                colorIndex = (colorIndex + 1) % trafficColors.length;
+            }
+        }
+    </script>
+
+    <!--<script>
+        // Check if the user is logged in
+        if (localStorage.getItem('isLoggedIn') !== 'true') {
+            window.location.href = "login.html";
+        }
+    </script>-->
+    
+</body>
+</html>
